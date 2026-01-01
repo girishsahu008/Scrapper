@@ -179,8 +179,26 @@
 </head>
 <body>
     <div class="container">
-        <h1>🛒 Amazon Scraper</h1>
-        <p class="subtitle">Scrape Amazon product data with ease</p>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div>
+                <h1 style="margin: 0;">🛒 Amazon Scraper</h1>
+                <p class="subtitle" style="margin: 5px 0 0 0;">Scrape Amazon product data with ease</p>
+            </div>
+            <div style="text-align: right;">
+                <div style="font-size: 12px; color: #666; margin-bottom: 5px;">
+                    <span id="userInfo">User: <strong id="usernameDisplay">-</strong></span>
+                </div>
+                <div style="font-size: 12px; color: #667eea; margin-bottom: 5px;">
+                    Remaining Pages: <strong id="remainingPagesDisplay">-</strong>
+                </div>
+                <button 
+                    id="logoutBtn" 
+                    style="padding: 6px 12px; font-size: 12px; background: #dc3545; width: auto; margin-top: 5px;"
+                >
+                    Logout
+                </button>
+            </div>
+        </div>
 
         <form id="scrapeForm">
             <div class="form-group">
@@ -240,6 +258,80 @@
 
         let currentJobId = null;
         let progressInterval = null;
+        const usernameDisplay = document.getElementById('usernameDisplay');
+        const remainingPagesDisplay = document.getElementById('remainingPagesDisplay');
+        const logoutBtn = document.getElementById('logoutBtn');
+
+        // Check authentication on page load
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/auth/check', {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                
+                if (!data.authenticated) {
+                    // Redirect to login
+                    window.location.href = '/login';
+                    return false;
+                }
+                
+                // Update UI with user info
+                usernameDisplay.textContent = data.username;
+                remainingPagesDisplay.textContent = data.remainingPages;
+                updateMaxPagesInput(data.remainingPages);
+                return true;
+            } catch (error) {
+                console.error('Auth check failed:', error);
+                window.location.href = '/login';
+                return false;
+            }
+        }
+
+        // Update max pages input based on remaining pages
+        function updateMaxPagesInput(maxPages) {
+            const pagesInput = document.getElementById('pages');
+            pagesInput.max = maxPages;
+            if (parseInt(pagesInput.value) > maxPages) {
+                pagesInput.value = maxPages;
+            }
+        }
+
+        // Logout handler
+        logoutBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                console.error('Logout failed:', error);
+            }
+        });
+
+        // Check auth on page load
+        checkAuth().then(isAuthenticated => {
+            if (!isAuthenticated) return;
+            
+            // Refresh remaining pages periodically
+            setInterval(async () => {
+                try {
+                    const response = await fetch('/api/auth/check', {
+                        credentials: 'include'
+                    });
+                    const data = await response.json();
+                    if (data.authenticated) {
+                        remainingPagesDisplay.textContent = data.remainingPages;
+                        updateMaxPagesInput(data.remainingPages);
+                    }
+                } catch (error) {
+                    console.error('Failed to refresh pages:', error);
+                }
+            }, 5000); // Every 5 seconds
+        });
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -263,12 +355,18 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
+                    credentials: 'include', // Important for sessions
                     body: JSON.stringify({ url, pages })
                 });
 
                 const data = await response.json();
 
                 if (!response.ok) {
+                    if (response.status === 401) {
+                        // Not authenticated, redirect to login
+                        window.location.href = '/login';
+                        return;
+                    }
                     throw new Error(data.error || 'Failed to start scraping');
                 }
 
@@ -288,12 +386,27 @@
 
             progressInterval = setInterval(async () => {
                 try {
-                    const response = await fetch(`/api/progress/${currentJobId}`);
+                    const response = await fetch(`/api/progress/${currentJobId}`, {
+                        credentials: 'include'
+                    });
+                    
+                    if (response.status === 401) {
+                        // Not authenticated, redirect to login
+                        clearInterval(progressInterval);
+                        window.location.href = '/login';
+                        return;
+                    }
+                    
                     const progress = await response.json();
 
                     if (progress.status === 'completed') {
                         clearInterval(progressInterval);
                         showSuccess(`Scraping completed! Found ${progress.totalProducts} products.`);
+                        // Update remaining pages
+                        if (progress.remainingPages !== undefined) {
+                            remainingPagesDisplay.textContent = progress.remainingPages;
+                            updateMaxPagesInput(progress.remainingPages);
+                        }
                         showDownload();
                         resetForm();
                     } else if (progress.status === 'error') {
@@ -316,6 +429,12 @@
 
             const info = `Page ${progress.currentPage || 0} of ${progress.totalPages || 1} | Products: ${progress.productsScraped || 0}`;
             progressInfo.textContent = info;
+            
+            // Update remaining pages if available
+            if (progress.remainingPages !== undefined) {
+                remainingPagesDisplay.textContent = progress.remainingPages;
+                updateMaxPagesInput(progress.remainingPages);
+            }
         }
 
         function showDownload() {
@@ -323,7 +442,15 @@
             downloadBtn.onclick = async () => {
                 try {
                     // Get the CSV URL from the progress
-                    const response = await fetch(`/api/progress/${currentJobId}`);
+                    const response = await fetch(`/api/progress/${currentJobId}`, {
+                        credentials: 'include'
+                    });
+                    
+                    if (response.status === 401) {
+                        window.location.href = '/login';
+                        return;
+                    }
+                    
                     const progress = await response.json();
                     
                     if (progress.csvUrl) {

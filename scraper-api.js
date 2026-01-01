@@ -29,16 +29,16 @@ async function scrapeAmazonWithProgress(url, maxPages = 1, progressCallback = nu
         
         const updateProgress = (pageCompleted, productsCount, isComplete = false) => {
             if (progressCallback) {
-                // Simple progress calculation: based on pages completed
+                // Simple progress calculation: (pageCompleted / maxPages) * 100
                 let progress;
                 if (isComplete) {
                     progress = 100;
                 } else {
-                    // Each page contributes (90/maxPages)% to total progress
-                    // Page 1 done = 90/maxPages%, Page 2 done = 2*90/maxPages%, etc.
-                    progress = Math.round((pageCompleted / maxPages) * 90);
-                    // Cap at 90% until CSV is written
-                    if (progress >= 90) progress = 90;
+                    // For 2 pages: page 1 = 50%, page 2 = 100%
+                    // For 3 pages: page 1 = 33.33%, page 2 = 66.66%, page 3 = 100%
+                    // For 4 pages: page 1 = 25%, page 2 = 50%, page 3 = 75%, page 4 = 100%
+                    progress = Math.round((pageCompleted / maxPages) * 100);
+                    if (progress > 100) progress = 100;
                     if (progress < 0) progress = 0;
                 }
                 
@@ -51,9 +51,6 @@ async function scrapeAmazonWithProgress(url, maxPages = 1, progressCallback = nu
                 });
             }
         };
-        
-        // Initial progress
-        updateProgress(0, 0, false);
         
         for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
             let currentUrl = url;
@@ -383,9 +380,6 @@ async function scrapeAmazonWithProgress(url, maxPages = 1, progressCallback = nu
                 await delay(2000);
             }
         }
-        
-        // Write CSV file - show 95% progress
-        updateProgress(maxPages, allProducts.length, false);
         
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
         const csvPath = path.join(outputFolder, `amazon_products_${timestamp}.csv`);
