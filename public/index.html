@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amazon Scraper</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .progress-container {
+            margin-top: 30px;
+            display: none;
+        }
+
+        .progress-container.active {
+            display: block;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 12px;
+        }
+
+        .progress-info {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .download-container {
+            margin-top: 20px;
+            display: none;
+            text-align: center;
+        }
+
+        .download-container.active {
+            display: block;
+        }
+
+        .download-btn {
+            background: #28a745;
+            padding: 12px 30px;
+            width: auto;
+            display: inline-block;
+        }
+
+        .download-btn:hover:not(:disabled) {
+            box-shadow: 0 10px 20px rgba(40, 167, 69, 0.4);
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .error-message.active {
+            display: block;
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .success-message.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛒 Amazon Scraper</h1>
+        <p class="subtitle">Scrape Amazon product data with ease</p>
+
+        <form id="scrapeForm">
+            <div class="form-group">
+                <label for="url">Amazon URL:</label>
+                <input 
+                    type="url" 
+                    id="url" 
+                    name="url" 
+                    placeholder="https://www.amazon.in/s?k=metal+furniture"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="pages">Number of Pages:</label>
+                <input 
+                    type="number" 
+                    id="pages" 
+                    name="pages" 
+                    min="1" 
+                    max="10" 
+                    value="1"
+                    required
+                >
+            </div>
+
+            <button type="submit" id="submitBtn">Start Scraping</button>
+        </form>
+
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill">0%</div>
+            </div>
+            <div class="progress-info" id="progressInfo">
+                Initializing...
+            </div>
+        </div>
+
+        <div class="error-message" id="errorMessage"></div>
+        <div class="success-message" id="successMessage"></div>
+
+        <div class="download-container" id="downloadContainer">
+            <button class="download-btn" id="downloadBtn">Download CSV</button>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('scrapeForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressInfo = document.getElementById('progressInfo');
+        const downloadContainer = document.getElementById('downloadContainer');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const errorMessage = document.getElementById('errorMessage');
+        const successMessage = document.getElementById('successMessage');
+
+        let currentJobId = null;
+        let progressInterval = null;
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const url = document.getElementById('url').value;
+            const pages = parseInt(document.getElementById('pages').value);
+
+            // Reset UI
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Starting...';
+            progressContainer.classList.add('active');
+            downloadContainer.classList.remove('active');
+            errorMessage.classList.remove('active');
+            successMessage.classList.remove('active');
+            progressFill.style.width = '0%';
+            progressFill.textContent = '0%';
+
+            try {
+                const response = await fetch('/api/scrape', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ url, pages })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to start scraping');
+                }
+
+                currentJobId = data.jobId;
+                startProgressPolling();
+
+            } catch (error) {
+                showError(error.message);
+                resetForm();
+            }
+        });
+
+        function startProgressPolling() {
+            if (progressInterval) {
+                clearInterval(progressInterval);
+            }
+
+            progressInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/progress/${currentJobId}`);
+                    const progress = await response.json();
+
+                    if (progress.status === 'completed') {
+                        clearInterval(progressInterval);
+                        showSuccess(`Scraping completed! Found ${progress.totalProducts} products.`);
+                        showDownload();
+                        resetForm();
+                    } else if (progress.status === 'error') {
+                        clearInterval(progressInterval);
+                        showError(progress.error || 'Scraping failed');
+                        resetForm();
+                    } else {
+                        updateProgress(progress);
+                    }
+                } catch (error) {
+                    console.error('Error fetching progress:', error);
+                }
+            }, 1000);
+        }
+
+        function updateProgress(progress) {
+            const percentage = progress.progress || 0;
+            progressFill.style.width = `${percentage}%`;
+            progressFill.textContent = `${percentage}%`;
+
+            const info = `Page ${progress.currentPage || 0} of ${progress.totalPages || 1} | Products: ${progress.productsScraped || 0}`;
+            progressInfo.textContent = info;
+        }
+
+        function showDownload() {
+            downloadContainer.classList.add('active');
+            downloadBtn.onclick = async () => {
+                try {
+                    // Get the CSV URL from the progress
+                    const response = await fetch(`/api/progress/${currentJobId}`);
+                    const progress = await response.json();
+                    
+                    if (progress.csvUrl) {
+                        // Use the direct URL
+                        const a = document.createElement('a');
+                        a.href = progress.csvUrl;
+                        const fileName = progress.csvUrl.split('/').pop();
+                        a.download = fileName;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    } else if (progress.csvFile) {
+                        // Fallback: try download endpoint
+                        const downloadResponse = await fetch(`/api/download/${currentJobId}`);
+                        if (downloadResponse.ok) {
+                            const blob = await downloadResponse.blob();
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `amazon_products_${new Date().toISOString().slice(0, 10)}.csv`;
+                            document.body.appendChild(a);
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                            document.body.removeChild(a);
+                        } else {
+                            showError('Download failed');
+                        }
+                    } else {
+                        showError('CSV file not available');
+                    }
+                } catch (error) {
+                    showError('Download failed: ' + error.message);
+                }
+            };
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('active');
+        }
+
+        function showSuccess(message) {
+            successMessage.textContent = message;
+            successMessage.classList.add('active');
+        }
+
+        function resetForm() {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Start Scraping';
+        }
+    </script>
+</body>
+</html>
+

@@ -5,13 +5,17 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node scraper.js",
-    "scrape": "node scraper.js"
+    "scrape": "node scraper.js",
+    "server": "node server.js",
+    "ui": "node server.js"
   },
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "cors": "^2.8.5",
     "csv-writer": "^1.6.0",
+    "express": "^5.2.1",
     "puppeteer": "^24.34.0"
   }
 }
