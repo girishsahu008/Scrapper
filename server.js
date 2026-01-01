@@ -179,13 +179,45 @@ app.post('/api/scrape', requireAuth, async (req, res) => {
     const jobId = Date.now().toString();
     const maxPages = requestedPages;
     
+    // Initialize job first
+    activeJobs.set(jobId, {
+        status: 'started',
+        progress: 0,
+        currentPage: 0,
+        totalPages: maxPages,
+        productsScraped: 0,
+        username: username
+    });
+    
     // Start scraping in background
     scrapeAmazonWithProgress(url, maxPages, (progress) => {
-        const currentJob = activeJobs.get(jobId) || {};
-        activeJobs.set(jobId, {
-            ...currentJob,
-            ...progress
-        });
+        console.log(`Progress callback received:`, progress);
+        // Get the current job and merge with new progress
+        const currentJob = activeJobs.get(jobId);
+        if (currentJob) {
+            // Merge progress, ensuring new values override old ones
+            const updatedJob = {
+                ...currentJob,
+                ...progress,
+                // Ensure these are always updated from progress
+                status: progress.status !== undefined ? progress.status : currentJob.status,
+                progress: progress.progress !== undefined ? progress.progress : currentJob.progress,
+                currentPage: progress.currentPage !== undefined ? progress.currentPage : currentJob.currentPage,
+                productsScraped: progress.productsScraped !== undefined ? progress.productsScraped : currentJob.productsScraped,
+                totalProducts: progress.totalProducts !== undefined ? progress.totalProducts : currentJob.totalProducts,
+                totalPages: progress.totalPages !== undefined ? progress.totalPages : currentJob.totalPages
+            };
+            activeJobs.set(jobId, updatedJob);
+            console.log(`Job updated in Map:`, updatedJob);
+        } else {
+            // If job doesn't exist, create it
+            const newJob = {
+                ...progress,
+                username: username
+            };
+            activeJobs.set(jobId, newJob);
+            console.log(`New job created in Map:`, newJob);
+        }
     }).then((result) => {
         console.log('Scraping completed, CSV file path:', result.csvFile);
         
@@ -210,14 +242,15 @@ app.post('/api/scrape', requireAuth, async (req, res) => {
             progress: 100,
             csvFile: result.csvFile, // Keep full path for server
             csvUrl: csvUrl, // Public URL for download
-            totalProducts: result.totalProducts,
-            productsScraped: result.totalProducts,
+            totalProducts: result.totalProducts || currentJob.totalProducts || 0,
+            productsScraped: result.totalProducts || currentJob.totalProducts || 0,
             currentPage: maxPages,
             totalPages: maxPages,
             remainingPages: newRemaining
         };
         activeJobs.set(jobId, finalJob);
         console.log('Job stored with CSV URL:', csvUrl);
+        console.log('Total products:', finalJob.totalProducts);
         console.log('File exists:', fs.existsSync(finalJob.csvFile));
     }).catch((error) => {
         const currentJob = activeJobs.get(jobId) || {};
@@ -226,16 +259,6 @@ app.post('/api/scrape', requireAuth, async (req, res) => {
             status: 'error',
             error: error.message
         });
-    });
-    
-    // Initialize job
-    activeJobs.set(jobId, {
-        status: 'started',
-        progress: 0,
-        currentPage: 0,
-        totalPages: maxPages,
-        productsScraped: 0,
-        username: username
     });
     
     res.json({ jobId });
@@ -259,10 +282,14 @@ app.get('/api/progress/:jobId', requireAuth, (req, res) => {
     const user = findUser(req.session.user);
     const remainingPages = user ? parseInt(user.noOfPages) || 0 : 0;
     
-    res.json({
+    const responseData = {
         ...progress,
         remainingPages: remainingPages
-    });
+    };
+    
+    console.log(`Returning progress for job ${jobId}:`, responseData);
+    
+    res.json(responseData);
 });
 
 // Download CSV endpoint (protected)

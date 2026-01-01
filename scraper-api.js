@@ -37,7 +37,14 @@ async function scrapeAmazonWithProgress(url, maxPages = 1, progressCallback = nu
                     // For 2 pages: page 1 = 50%, page 2 = 100%
                     // For 3 pages: page 1 = 33.33%, page 2 = 66.66%, page 3 = 100%
                     // For 4 pages: page 1 = 25%, page 2 = 50%, page 3 = 75%, page 4 = 100%
-                    progress = Math.round((pageCompleted / maxPages) * 100);
+                    // When pageCompleted = 0, show 0%
+                    // When pageCompleted = 1 and maxPages = 1, show 100%
+                    // When pageCompleted = 1 and maxPages = 2, show 50%
+                    if (pageCompleted === 0) {
+                        progress = 0;
+                    } else {
+                        progress = Math.round((pageCompleted / maxPages) * 100);
+                    }
                     if (progress > 100) progress = 100;
                     if (progress < 0) progress = 0;
                 }
@@ -47,10 +54,14 @@ async function scrapeAmazonWithProgress(url, maxPages = 1, progressCallback = nu
                     progress,
                     currentPage: pageCompleted,
                     totalPages: maxPages,
-                    productsScraped: productsCount
+                    productsScraped: productsCount,
+                    totalProducts: productsCount // Include totalProducts in progress updates
                 });
             }
         };
+        
+        // Initial progress - show 0% when starting
+        updateProgress(0, 0, false);
         
         for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
             let currentUrl = url;
@@ -374,6 +385,9 @@ async function scrapeAmazonWithProgress(url, maxPages = 1, progressCallback = nu
             
             // Update progress after scraping each page
             allProducts.push(...products);
+            
+            // If this is the last page, show 100% progress (but not completed yet - CSV still needs to be written)
+            // For 1 page: after page 1 = 100%, for 2 pages: after page 1 = 50%, after page 2 = 100%
             updateProgress(pageNum, allProducts.length, false);
             
             if (pageNum < maxPages) {
@@ -400,7 +414,10 @@ async function scrapeAmazonWithProgress(url, maxPages = 1, progressCallback = nu
         
         await csvWriter.writeRecords(allProducts);
         
-        // Final update with completion status - only now show 100%
+        // Small delay to ensure progress bar updates before showing completion
+        await delay(500);
+        
+        // Mark as completed AFTER CSV is written
         updateProgress(maxPages, allProducts.length, true);
         
         return {

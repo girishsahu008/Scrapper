@@ -398,10 +398,14 @@
                     }
                     
                     const progress = await response.json();
+                    
+                    console.log('Progress received:', progress);
 
-                    if (progress.status === 'completed') {
+                    // Only show download when status is explicitly 'completed' and progress is 100%
+                    // This ensures CSV is written and everything is done
+                    if (progress.status === 'completed' && progress.progress === 100) {
                         clearInterval(progressInterval);
-                        showSuccess(`Scraping completed! Found ${progress.totalProducts} products.`);
+                        showSuccess(`Scraping completed! Found ${progress.totalProducts || 0} products.`);
                         // Update remaining pages
                         if (progress.remainingPages !== undefined) {
                             remainingPagesDisplay.textContent = progress.remainingPages;
@@ -414,6 +418,7 @@
                         showError(progress.error || 'Scraping failed');
                         resetForm();
                     } else {
+                        // Update progress bar for any status that's not completed or error
                         updateProgress(progress);
                     }
                 } catch (error) {
@@ -423,7 +428,14 @@
         }
 
         function updateProgress(progress) {
+            console.log('Updating progress bar:', progress);
             const percentage = progress.progress || 0;
+            
+            // Make sure progress container is visible
+            if (!progressContainer.classList.contains('active')) {
+                progressContainer.classList.add('active');
+            }
+            
             progressFill.style.width = `${percentage}%`;
             progressFill.textContent = `${percentage}%`;
 
