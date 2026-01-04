@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Amazon Scraper</title>
+    <title>Ecom Scraper</title>
     <style>
         * {
             margin: 0;
@@ -181,8 +181,8 @@
     <div class="container">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <div>
-                <h1 style="margin: 0;">🛒 Amazon Scraper</h1>
-                <p class="subtitle" style="margin: 5px 0 0 0;">Scrape Amazon product data with ease</p>
+                <h1 style="margin: 0;">🛒 Ecommerce Scraper</h1>
+                <!-- <p class="subtitle" style="margin: 5px 0 0 0;">Scrape Amazon product data with ease</p> -->
             </div>
             <div style="text-align: right;">
                 <div style="font-size: 12px; color: #666; margin-bottom: 5px;">
@@ -202,7 +202,15 @@
 
         <form id="scrapeForm">
             <div class="form-group">
-                <label for="url">Amazon URL:</label>
+                <label for="platform">Platform:</label>
+                <select id="platform" name="platform" style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 16px;">
+                    <option value="amazon">Amazon</option>
+                    <option value="flipkart">Flipkart</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="url">Product Search URL:</label>
                 <input 
                     type="url" 
                     id="url" 
@@ -338,6 +346,7 @@
             
             const url = document.getElementById('url').value;
             const pages = parseInt(document.getElementById('pages').value);
+            const platform = document.getElementById('platform').value;
 
             // Reset UI
             submitBtn.disabled = true;
@@ -356,7 +365,7 @@
                         'Content-Type': 'application/json'
                     },
                     credentials: 'include', // Important for sessions
-                    body: JSON.stringify({ url, pages })
+                    body: JSON.stringify({ url, pages, platform })
                 });
 
                 const data = await response.json();

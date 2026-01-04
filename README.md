@@ -65,7 +65,7 @@ sudo apt-get install -y \
     ca-certificates \
     fonts-liberation \
     libappindicator3-1 \
-    libasound2 \
+    libasound2t64 \
     libatk-bridge2.0-0 \
     libatk1.0-0 \
     libc6 \
@@ -99,6 +99,15 @@ sudo apt-get install -y \
     lsb-release \
     wget \
     xdg-utils
+```
+
+**Note**: If you encounter an error with `libasound2t64` (on older Ubuntu versions), try using `libasound2` instead, or install it separately:
+
+```bash
+# For Ubuntu 24.04 and newer, use libasound2t64
+# For Ubuntu 22.04 and older, use libasound2
+# Try the command above first, if it fails, use this:
+sudo apt-get install -y libasound2 || sudo apt-get install -y libasound2t64
 ```
 
 ### 3. Clone and Setup Project
@@ -245,14 +254,78 @@ node --version
 nvm use 18
 ```
 
-### Puppeteer/Chrome issues
-```bash
-# Reinstall Puppeteer
-npm uninstall puppeteer
-npm install puppeteer
+### Puppeteer/Chrome Download Issues
 
-# Or install Chromium manually
+If you encounter a 403 error when Puppeteer tries to download Chrome:
+
+**Solution 1: Install Chromium system-wide and configure Puppeteer to use it (Recommended)**
+
+```bash
+# Step 1: Install Chromium
+sudo apt-get update
 sudo apt-get install -y chromium-browser
+
+# Step 2: Find Chromium path
+which chromium-browser
+# This should return something like /usr/bin/chromium-browser or /usr/bin/chromium
+
+# Step 3: Install npm packages with skip download
+cd ~/Scrapper
+PUPPETEER_SKIP_DOWNLOAD=true npm install
+
+# Step 4: Update scraper-api.js
+# Find the browser launch code (around line 18-21) and change it to:
+# const browser = await puppeteer.launch({
+#     headless: true,
+#     executablePath: '/usr/bin/chromium-browser',  # Use the path from step 2
+#     args: ['--no-sandbox', '--disable-setuid-sandbox']
+# });
+```
+
+**Alternative: If chromium-browser path is different, find it with:**
+```bash
+which chromium-browser || which chromium || find /usr -name chromium* 2>/dev/null | head -1
+```
+
+**Solution 2: Use Puppeteer with Chromium (Alternative package)**
+
+```bash
+# Uninstall puppeteer
+npm uninstall puppeteer
+
+# Install puppeteer-core and chromium separately
+npm install puppeteer-core
+sudo apt-get install -y chromium-browser
+
+# Update scraper-api.js to use system Chromium (see Solution 1)
+```
+
+**Solution 3: Manual Chrome Download (if network allows)**
+
+```bash
+# Set environment variable to use a different download method
+export PUPPETEER_DOWNLOAD_HOST=https://npm.taobao.org/mirrors
+npm install
+
+# Or try with skip download and manual setup
+PUPPETEER_SKIP_DOWNLOAD=true npm install
+# Then manually download and configure Chrome
+```
+
+**Solution 4: Use existing Chrome/Chromium**
+
+If Chrome/Chromium is already installed on your system:
+
+```bash
+# Install with skip download
+PUPPETEER_SKIP_DOWNLOAD=true npm install
+
+# Find Chromium path
+which chromium-browser
+# or
+which google-chrome
+
+# Update scraper-api.js to use the system browser path
 ```
 
 ### Port already in use

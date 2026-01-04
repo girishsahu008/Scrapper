@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const session = require('express-session');
 const { scrapeAmazonWithProgress } = require('./scraper-api');
+const { scrapeFlipkartWithProgress } = require('./flipkart-scraper');
 
 const app = express();
 const PORT = 3000;
@@ -153,7 +154,7 @@ app.get('/login', (req, res) => {
 
 // Start scraping endpoint (protected)
 app.post('/api/scrape', requireAuth, async (req, res) => {
-    const { url, pages } = req.body;
+    const { url, pages, platform } = req.body;
     const username = req.session.user;
     
     if (!url) {
@@ -161,6 +162,7 @@ app.post('/api/scrape', requireAuth, async (req, res) => {
     }
     
     const requestedPages = parseInt(pages) || 1;
+    const selectedPlatform = platform || 'amazon'; // Default to amazon
     
     // Check user's remaining pages
     const user = findUser(username);
@@ -186,11 +188,12 @@ app.post('/api/scrape', requireAuth, async (req, res) => {
         currentPage: 0,
         totalPages: maxPages,
         productsScraped: 0,
-        username: username
+        username: username,
+        platform: selectedPlatform
     });
     
-    // Start scraping in background
-    scrapeAmazonWithProgress(url, maxPages, (progress) => {
+    // Define the progress callback handling
+    const handleProgress = (progress) => {
         console.log(`Progress callback received:`, progress);
         // Get the current job and merge with new progress
         const currentJob = activeJobs.get(jobId);
@@ -210,15 +213,18 @@ app.post('/api/scrape', requireAuth, async (req, res) => {
             activeJobs.set(jobId, updatedJob);
             console.log(`Job updated in Map:`, updatedJob);
         } else {
-            // If job doesn't exist, create it
+            // If job doesn't exist, create it (should rarely happen as we init above)
             const newJob = {
                 ...progress,
-                username: username
+                username: username,
+                platform: selectedPlatform
             };
             activeJobs.set(jobId, newJob);
-            console.log(`New job created in Map:`, newJob);
         }
-    }).then((result) => {
+    };
+
+    // Define completion handler
+    const handleCompletion = (result) => {
         console.log('Scraping completed, CSV file path:', result.csvFile);
         
         // Update user's page limit
@@ -250,16 +256,28 @@ app.post('/api/scrape', requireAuth, async (req, res) => {
         };
         activeJobs.set(jobId, finalJob);
         console.log('Job stored with CSV URL:', csvUrl);
-        console.log('Total products:', finalJob.totalProducts);
-        console.log('File exists:', fs.existsSync(finalJob.csvFile));
-    }).catch((error) => {
-        const currentJob = activeJobs.get(jobId) || {};
-        activeJobs.set(jobId, {
-            ...currentJob,
-            status: 'error',
-            error: error.message
+    };
+
+    // Start scraping in background based on platform
+    let scrapePromise;
+    if (selectedPlatform === 'flipkart') {
+        console.log('Starting Flipkart scraping...');
+        scrapePromise = scrapeFlipkartWithProgress(url, maxPages, handleProgress);
+    } else {
+        console.log('Starting Amazon scraping...');
+        scrapePromise = scrapeAmazonWithProgress(url, maxPages, handleProgress);
+    }
+
+    scrapePromise
+        .then(handleCompletion)
+        .catch((error) => {
+            const currentJob = activeJobs.get(jobId) || {};
+            activeJobs.set(jobId, {
+                ...currentJob,
+                status: 'error',
+                error: error.message
+            });
         });
-    });
     
     res.json({ jobId });
 });
