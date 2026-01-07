@@ -134,6 +134,16 @@ async function scrapeAmazon(url, maxPages = 1, headless = true) {
             
             // Extract products from current page
             const products = await page.evaluate(() => {
+                // Helper to extract numbers with K/M suffixes without conversion
+                function extractCount(str) {
+                    if (!str) return null;
+                    // Match number/comma + optional decimal + optional space + optional K/M + optional +
+                    const match = str.match(/([\d,]+(?:\.\d+)?\s*[kKmM]?\+?)/);
+                    if (!match) return null;
+                    // Normalize: remove spaces, uppercase suffix
+                    return match[1].replace(/\s+/g, '').toUpperCase();
+                }
+
                 // Try multiple selectors to find products
                 let productElements = document.querySelectorAll('[data-component-type="s-search-result"]');
                 
@@ -327,11 +337,8 @@ async function scrapeAmazon(url, maxPages = 1, headless = true) {
                         let numRatings = 'N/A';
                         const ratingsLink = element.querySelector('a[href*="#customerReviews"]');
                         if (ratingsLink) {
-                            const ratingsText = ratingsLink.textContent.trim();
-                            const ratingsMatch = ratingsText.match(/([\d,]+)/);
-                            if (ratingsMatch) {
-                                numRatings = ratingsMatch[1].replace(/,/g, '');
-                            }
+                            const val = extractCount(ratingsLink.textContent.trim());
+                            if (val) numRatings = val;
                         }
                         
                         // Try to find rating count in nearby elements
@@ -340,9 +347,10 @@ async function scrapeAmazon(url, maxPages = 1, headless = true) {
                                                    element.querySelector('.a-size-base');
                             if (ratingContainer) {
                                 const allText = ratingContainer.textContent;
-                                const ratingsMatch = allText.match(/([\d,]+)\s*(?:ratings?|reviews?)/i);
-                                if (ratingsMatch) {
-                                    numRatings = ratingsMatch[1].replace(/,/g, '');
+                                // Look for "X ratings" or "X reviews"
+                                if (/ratings?|reviews?/i.test(allText)) {
+                                    const val = extractCount(allText);
+                                    if (val) numRatings = val;
                                 }
                             }
                         }
@@ -352,10 +360,12 @@ async function scrapeAmazon(url, maxPages = 1, headless = true) {
                             const spans = element.querySelectorAll('span.a-size-base, span.a-color-base');
                             for (const span of spans) {
                                 const text = span.textContent.trim();
-                                const match = text.match(/([\d,]+)\s*(?:ratings?|reviews?)/i);
-                                if (match) {
-                                    numRatings = match[1].replace(/,/g, '');
-                                    break;
+                                if (/ratings?|reviews?/i.test(text)) {
+                                    const val = extractCount(text);
+                                    if (val) {
+                                        numRatings = val;
+                                        break;
+                                    }
                                 }
                             }
                         }
@@ -364,11 +374,8 @@ async function scrapeAmazon(url, maxPages = 1, headless = true) {
                         let unitsSold = 'N/A';
                         const unitsSoldElement = element.querySelector('[data-testid="units-sold"]');
                         if (unitsSoldElement) {
-                            const unitsText = unitsSoldElement.textContent.trim();
-                            const unitsMatch = unitsText.match(/([\d,]+)/);
-                            if (unitsMatch) {
-                                unitsSold = unitsMatch[1].replace(/,/g, '');
-                            }
+                            const val = extractCount(unitsSoldElement.textContent.trim());
+                            if (val) unitsSold = val;
                         }
                         
                         // Check all span elements for units sold pattern
@@ -376,19 +383,14 @@ async function scrapeAmazon(url, maxPages = 1, headless = true) {
                             const spans = element.querySelectorAll('span');
                             for (const span of spans) {
                                 const text = span.textContent.trim();
-                                // Match patterns like "700+ bought in past month", "500 bought", "1K+ bought", etc.
-                                const unitsPattern = /([\d,]+)\+?\s*(?:bought|sold|purchased)\s*(?:in\s+(?:past|last)\s+(?:month|week|day))?/i;
-                                const match = text.match(unitsPattern);
-                                if (match) {
-                                    unitsSold = match[1].replace(/,/g, '');
-                                    break;
-                                }
-                                // Also try pattern without "in past month"
-                                const simplePattern = /([\d,]+)\+?\s*(?:bought|sold|purchased)/i;
-                                const simpleMatch = text.match(simplePattern);
-                                if (simpleMatch) {
-                                    unitsSold = simpleMatch[1].replace(/,/g, '');
-                                    break;
+                                // Match patterns like "700+ bought...", "1K+ bought..."
+                                const unitsPattern = /([\d,]+(?:\.\d+)?)\s*([kKmM])?\+?\s*(?:bought|sold|purchased)/i;
+                                if (unitsPattern.test(text)) {
+                                    const val = extractCount(text);
+                                    if (val) {
+                                        unitsSold = val;
+                                        break;
+                                    }
                                 }
                             }
                         }
@@ -396,18 +398,10 @@ async function scrapeAmazon(url, maxPages = 1, headless = true) {
                         // Check all text for units sold pattern as fallback
                         if (unitsSold === 'N/A') {
                             const allText = element.textContent;
-                            // Match patterns like "700+ bought in past month", "500 bought", etc.
-                            const unitsPattern = /([\d,]+)\+?\s*(?:bought|sold|purchased)\s*(?:in\s+(?:past|last)\s+(?:month|week|day))?/i;
-                            const match = allText.match(unitsPattern);
-                            if (match) {
-                                unitsSold = match[1].replace(/,/g, '');
-                            } else {
-                                // Try simpler pattern
-                                const simplePattern = /([\d,]+)\+?\s*(?:bought|sold|purchased)/i;
-                                const simpleMatch = allText.match(simplePattern);
-                                if (simpleMatch) {
-                                    unitsSold = simpleMatch[1].replace(/,/g, '');
-                                }
+                            const unitsPattern = /([\d,]+(?:\.\d+)?)\s*([kKmM])?\+?\s*(?:bought|sold|purchased)/i;
+                            if (unitsPattern.test(allText)) {
+                                const val = extractCount(allText);
+                                if (val) unitsSold = val;
                             }
                         }
                         
